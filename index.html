@@ -3,46 +3,169 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>StudyAdvisor | Flow-State HUD</title>
-  
-  <link rel="manifest" href="/FlowHUD/manifest.json">
+  <title>StudyAdvisor | Flow-HUD</title>
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#8b5cf6">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="/FlowHUD/icon-512.png">
-
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    /* ... (Your original CSS remains here) ... */
-    :root { --primary: #8b5cf6; --bg: #020617; --card: rgba(15, 23, 42, 0.6); --border: rgba(255, 255, 255, 0.1); --text: #f8fafc; }
-    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
-    body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .app-container { width: 95vw; height: 90vh; display: grid; grid-template-columns: 320px 1fr 320px; gap: 20px; }
-    .glass-card { background: var(--card); backdrop-filter: blur(30px); border: 1px solid var(--border); border-radius: 24px; padding: 22px; }
-    #timerDisplay { font-family: 'JetBrains Mono'; font-size: 4.5rem; font-weight: 800; }
+    :root {
+      --primary: #8b5cf6; --primary-glow: rgba(139, 92, 246, 0.4);
+      --bg: #020617; --card: rgba(15, 23, 42, 0.6);
+      --border: rgba(255, 255, 255, 0.1); --text: #f8fafc;
+      --accent: #ec4899;
+    }
 
-    /* MOBILE RESPONSIVE FIX */
+    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.3s ease; }
+    body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
+    
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background: radial-gradient(circle at 15% 15%, var(--primary-glow) 0%, transparent 35%),
+                  radial-gradient(circle at 85% 85%, rgba(236, 72, 153, 0.1) 0%, transparent 35%);
+      z-index: -1;
+    }
+
+    .app-container { width: 95vw; height: 90vh; display: grid; grid-template-columns: 320px 1fr 320px; gap: 20px; }
+    .col { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+    .glass-card { background: var(--card); backdrop-filter: blur(30px); border: 1px solid var(--border); border-radius: 24px; padding: 22px; }
+    
+    .timer-orb { position: relative; width: 100%; max-width: 340px; aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; margin: auto; }
+    #timerDisplay { font-family: 'JetBrains Mono'; font-size: 4.5rem; font-weight: 800; z-index: 2; }
+
+    .scroll-area { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
+    .subject-block { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 15px; margin-bottom: 10px; border: 1px solid var(--border); }
+    
+    button { cursor: pointer; border: none; font-weight: 700; border-radius: 12px; color: white; background: rgba(255,255,255,0.1); }
+    .btn-engage { background: var(--primary); padding: 15px; width: 100%; font-size: 1.1rem; box-shadow: 0 10px 20px var(--primary-glow); }
+    
+    .sound-chip { padding: 8px 12px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); cursor: pointer; font-size: 0.7rem; }
+    .sound-chip.active { background: var(--primary); }
+
+    body.focus-active .hide-on-focus { display: none; }
+    body.focus-active .app-container { grid-template-columns: 1fr; }
+
     @media (max-width: 1024px) {
-      body { overflow-y: auto; height: auto; padding: 20px 0; }
-      .app-container { display: flex; flex-direction: column; width: 92vw; gap: 15px; }
-      .timer-orb { max-width: 280px; margin: 20px auto; }
-      #timerDisplay { font-size: 3.5rem; }
+      body { overflow-y: auto; height: auto; }
+      .app-container { display: flex; flex-direction: column; height: auto; padding: 20px; }
     }
   </style>
 </head>
 <body>
 
+<div class="app-container">
+  <aside class="col glass-card hide-on-focus">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <small style="color: var(--primary); font-weight: 800;">SUBJECTS</small>
+      <button onclick="addSubject()" style="padding: 5px 10px;">+ NEW</button>
+    </div>
+    <div class="scroll-area" id="subjectsContainer"></div>
+  </aside>
+
+  <main class="col" style="text-align: center;">
+    <h2 id="currentTaskDisplay">READY TO FLOW</h2>
+    <div class="timer-orb">
+      <canvas id="timerRing" width="340" height="340" style="position: absolute;"></canvas>
+      <div id="timerDisplay">25:00</div>
+    </div>
+    <div style="display: flex; gap: 10px; max-width: 400px; margin: 0 auto; width: 100%;">
+      <button class="btn-engage" id="timerBtn" onclick="toggleTimer()">ENGAGE</button>
+      <button onclick="document.body.classList.toggle('focus-active')" style="padding: 15px;">Focus</button>
+    </div>
+  </main>
+
+  <aside class="col hide-on-focus">
+    <div class="glass-card">
+      <small style="color: var(--accent); font-weight: 800;">SOUNDSCAPE</small>
+      <div id="soundGrid" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+        <div class="sound-chip active" onclick="setSound('none', this)">Silence</div>
+        <div class="sound-chip" onclick="setSound('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', this)">Lo-Fi</div>
+        <div class="sound-chip" onclick="setSound('https://actions.google.com/sounds/v1/water/rain_on_roof.ogg', this)">Rain</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<audio id="audioPlayer" loop></audio>
+
 <script>
-/* SERVICE WORKER REGISTRATION */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/FlowHUD/sw.js')
-      .then(reg => console.log('HUD: Offline Protocol Active'))
-      .catch(err => console.error('HUD: Protocol Offline Failed', err));
-  });
+/* --- STATE MANAGEMENT --- */
+let state = {
+  timer: { remaining: 1500, total: 1500, interval: null, running: false },
+  subjects: JSON.parse(localStorage.getItem('flow_data')) || []
+};
+
+/* --- TIMER LOGIC --- */
+function toggleTimer() {
+  const btn = document.getElementById('timerBtn');
+  if (state.timer.running) {
+    clearInterval(state.timer.interval);
+    state.timer.running = false;
+    btn.textContent = "RESUME";
+  } else {
+    state.timer.running = true;
+    btn.textContent = "ABORT";
+    state.timer.interval = setInterval(updateTimer, 1000);
+  }
 }
 
-/* ... (Rest of your original Timer logic stays here) ... */
+function updateTimer() {
+  if (state.timer.remaining > 0) {
+    state.timer.remaining--;
+    renderTimer();
+  } else {
+    clearInterval(state.timer.interval);
+    alert("Session Complete! Take a break.");
+    resetTimer();
+  }
+}
+
+function renderTimer() {
+  const m = Math.floor(state.timer.remaining / 60).toString().padStart(2, '0');
+  const s = (state.timer.remaining % 60).toString().padStart(2, '0');
+  document.getElementById('timerDisplay').textContent = `${m}:${s}`;
+  
+  const canvas = document.getElementById('timerRing');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,340,340);
+  ctx.beginPath();
+  ctx.arc(170, 170, 160, -Math.PI/2, -Math.PI/2 + (Math.PI*2 * (state.timer.remaining/state.timer.total)));
+  ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.stroke();
+}
+
+/* --- SUBJECT LOGIC --- */
+function addSubject() {
+  const name = prompt("Enter Subject Name:");
+  if(name) {
+    state.subjects.push({ name, chapters: [] });
+    save(); renderSubjects();
+  }
+}
+
+function renderSubjects() {
+  const container = document.getElementById('subjectsContainer');
+  container.innerHTML = state.subjects.map((s, i) => `
+    <div class="subject-block">
+      <strong>${s.name}</strong>
+      <button onclick="addChapter(${i})" style="float:right; font-size:0.6rem;">+ Task</button>
+    </div>
+  `).join('');
+}
+
+function save() { localStorage.setItem('flow_data', JSON.stringify(state.subjects)); }
+
+/* --- AUDIO ENGINE --- */
+function setSound(src, el) {
+  const player = document.getElementById('audioPlayer');
+  document.querySelectorAll('.sound-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  if(src === 'none') { player.pause(); } 
+  else { player.src = src; player.play(); }
+}
+
+// Init
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+renderSubjects();
+renderTimer();
 </script>
 </body>
 </html>
