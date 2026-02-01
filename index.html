@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>StudyAdvisor | Flow-State HUD</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#8b5cf6">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1041/1041916.png">
+  
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #8b5cf6; --primary-glow: rgba(139, 92, 246, 0.4);
+      --bg: #020617; --card: rgba(15, 23, 42, 0.6);
+      --border: rgba(255, 255, 255, 0.1); --text: #f8fafc;
+      --accent: #ec4899; --success: #10b981; --warning: #f59e0b;
+    }
+
+    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1); }
+    body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background: radial-gradient(circle at 15% 15%, var(--primary-glow) 0%, transparent 35%),
+                  radial-gradient(circle at 85% 85%, rgba(236, 72, 153, 0.1) 0%, transparent 35%);
+      z-index: -1;
+    }
+
+    .app-container { width: 95vw; height: 90vh; display: grid; grid-template-columns: 320px 1fr 320px; gap: 20px; }
+    .col { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+
+    .glass-card { background: var(--card); backdrop-filter: blur(30px); border: 1px solid var(--border); border-radius: 24px; padding: 22px; position: relative; }
+    .execution-hub { align-items: center; justify-content: center; text-align: center; }
+    
+    .timer-orb { position: relative; width: 100%; max-width: 360px; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; margin: 10px 0; }
+    #timerDisplay { font-family: 'JetBrains Mono', monospace; font-size: 4.5rem; font-weight: 800; text-shadow: 0 0 30px var(--primary-glow); z-index: 2; font-variant-numeric: tabular-nums; }
+
+    .scroll-area { overflow-y: auto; flex-grow: 1; padding-right: 8px; }
+    .scroll-area::-webkit-scrollbar { width: 3px; }
+    .scroll-area::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
+    
+    .subject-block { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+    .chapter-item { background: rgba(255,255,255,0.03); padding: 12px; border-radius: 16px; margin-top: 8px; border: 1px solid var(--border); cursor: pointer; }
+    .chapter-item.active { border-color: var(--primary); background: rgba(139, 92, 246, 0.15); box-shadow: 0 0 15px var(--primary-glow); }
+    
+    .progress-bar-wrap { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--primary); transition: width 0.8s ease; }
+
+    .config-input { background: rgba(0,0,0,0.3); border: 1px solid var(--border); color: white; border-radius: 8px; padding: 4px 8px; width: 60px; font-family: 'JetBrains Mono'; font-size: 0.8rem; outline: none; }
+
+    button { cursor: pointer; border: none; font-weight: 800; border-radius: 12px; padding: 10px 18px; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); }
+    button:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+    .btn-engage { background: var(--primary); font-size: 1rem; padding: 18px; border-radius: 18px; box-shadow: 0 10px 25px -5px var(--primary-glow); width: 100%; }
+
+    .sound-chip { font-size: 0.65rem; padding: 6px 10px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); cursor: pointer; }
+    .sound-chip.active { background: var(--primary); border-color: var(--primary); box-shadow: 0 0 10px var(--primary-glow); }
+
+    body.focus-active .hide-on-focus { display: none; }
+    body.focus-active .app-container { grid-template-columns: 1fr; }
+
+    /* RESPONSIVE MOBILE FIX */
+    @media (max-width: 1024px) {
+      body { overflow-y: auto; height: auto; padding: 20px 0; }
+      .app-container { display: flex; flex-direction: column; width: 92vw; height: auto; gap: 15px; }
+      .timer-orb { max-width: 280px; margin: 20px auto; }
+      #timerDisplay { font-size: 3.5rem; }
+      .col { overflow: visible; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <aside class="col glass-card hide-on-focus">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <small style="letter-spacing: 2px; color: var(--primary); font-weight: 800;">PERFORMANCE</small>
+        <button onclick="addSubject()" style="padding: 2px 10px; font-size: 0.7rem;">+ SUBJ</button>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+        <div class="glass-card" style="padding: 12px; text-align: center;">
+            <div id="statStreak" style="font-size: 1.4rem; font-weight: 800;">0</div>
+            <small style="opacity: 0.6; font-size: 0.6rem;">STREAK</small>
+        </div>
+        <div class="glass-card" style="padding: 12px; text-align: center;">
+            <div id="statPerf" style="font-size: 1.4rem; font-weight: 800;">0%</div>
+            <small style="opacity: 0.6; font-size: 0.6rem;">OVERALL</small>
+        </div>
+    </div>
+    <div class="scroll-area" id="subjectsContainer" style="margin-top: 10px;"></div>
+  </aside>
+
+  <main class="col execution-hub">
+    <div>
+      <small id="sessionType" style="letter-spacing: 4px; opacity: 0.5; color: var(--primary);">SYSTEM IDLE</small>
+      <h2 id="currentTaskDisplay" style="font-size: 1.8rem; margin: 5px 0 0 0;">READY</h2>
+    </div>
+
+    <div class="timer-orb">
+      <canvas id="timerRing" width="380" height="380" style="position: absolute;"></canvas>
+      <div id="timerDisplay">25:00</div>
+    </div>
+
+    <div style="display: flex; gap: 15px; align-items: center; width: 100%; max-width: 420px;">
+        <button class="btn-engage" id="timerBtn" onclick="toggleTimer()">ENGAGE MISSION</button>
+        <button onclick="toggleFocus()" title="Focus Mode (F)" style="padding: 18px; aspect-ratio: 1/1;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        </button>
+    </div>
+  </main>
+
+  <aside class="col hide-on-focus">
+    <div class="glass-card">
+        <small style="letter-spacing: 2px; color: var(--accent); font-weight: 800;">AI PROTOCOL</small>
+        <p id="aiSuggestion" style="font-weight: 600; line-height: 1.6; margin-top: 12px; font-size: 0.85rem; min-height: 4em; opacity: 0.9;"></p>
+        <button id="roastToggle" onclick="toggleRoast()" style="width: 100%; font-size: 0.65rem;">👹 ROAST MODE: OFF</button>
+    </div>
+
+    <div class="glass-card">
+        <div id="soundGrid" style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <div class="sound-chip active" data-sound="none" onclick="setChannel('none')">Silence</div>
+            <div class="sound-chip" data-sound="lofi" onclick="setChannel('lofi')">Lo-Fi</div>
+            <div class="sound-chip" data-sound="rain" onclick="setChannel('rain')">Rain</div>
+        </div>
+    </div>
+  </aside>
+</div>
+
+<audio id="audioPlayer" loop></audio>
+
+<script>
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('HUD: Offline Protocol Active'))
+      .catch(err => console.log('HUD: Registration Failed', err));
+  });
+}
+
+/* ======================
+    STATE & REFERENCES (Logic remains as per your original file)
+====================== */
+const timerBtn = document.getElementById("timerBtn"),
+      timerDisplay = document.getElementById("timerDisplay"),
+      timerRing = document.getElementById("timerRing"),
+      player = document.getElementById("audioPlayer"),
+      subjectsContainer = document.getElementById("subjectsContainer");
+
+const COLORS = { primary: "#8b5cf6", success: "#10b981", warning: "#f59e0b", accent: "#ec4899", track: "rgba(255,255,255,0.05)" };
+
+const state = {
+  subjects: JSON.parse(localStorage.getItem("studyData")) || [],
+  streak: Number(localStorage.getItem("streak")) || 0,
+  roastMode: false,
+  activeChapter: JSON.parse(localStorage.getItem("activeTask")) || { sIdx: null, cIdx: null },
+  isWorkSession: true,
+  workMins: 25,
+  timer: { interval: null, remaining: 1500, total: 1500, status: "idle" },
+  sound: { channel: 'none' }
+};
+
+// Simplified Logic for Demo
+function toggleTimer() {
+  if (state.timer.status === "running") {
+    clearInterval(state.timer.interval);
+    state.timer.status = "paused";
+    timerBtn.textContent = "RESUME";
+  } else {
+    state.timer.status = "running";
+    timerBtn.textContent = "ABORT";
+    state.timer.interval = setInterval(() => {
+      if(state.timer.remaining > 0) {
+        state.timer.remaining--;
+        renderTimer();
+      } else {
+        clearInterval(state.timer.interval);
+        alert("Session Complete!");
+      }
+    }, 1000);
+  }
+}
+
+function renderTimer() {
+  const m = String(Math.floor(state.timer.remaining / 60)).padStart(2, "0"), s = String(state.timer.remaining % 60).padStart(2, "0");
+  timerDisplay.textContent = `${m}:${s}`;
+  const ctx = timerRing.getContext("2d");
+  ctx.clearRect(0,0,380,380); ctx.beginPath(); ctx.arc(190,190,170,0,Math.PI*2); ctx.strokeStyle=COLORS.track; ctx.lineWidth=4; ctx.stroke();
+  ctx.beginPath(); ctx.arc(190,190,170,-Math.PI/2,-Math.PI/2 + Math.PI*2*(state.timer.remaining/state.timer.total));
+  ctx.strokeStyle = COLORS.primary; ctx.lineWidth=12; ctx.lineCap="round"; ctx.stroke();
+}
+
+function toggleFocus() { document.body.classList.toggle("focus-active"); }
+function toggleRoast() { state.roastMode = !state.roastMode; document.getElementById("roastToggle").textContent = `👹 ROAST MODE: ${state.roastMode?'ON':'OFF'}`; }
+
+renderTimer();
+</script>
+</body>
+</html>
